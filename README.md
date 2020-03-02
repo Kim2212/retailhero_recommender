@@ -1,1 +1,1 @@
-# Решение соревнования [Retailhero](retailhero.ai/c/recommender_system/overview) [19 место]
+# Решение соревнования [Retailhero](https://retailhero.ai/c/recommender_system/overview) [19 место]
