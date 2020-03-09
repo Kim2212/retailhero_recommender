@@ -37,6 +37,7 @@ CB_FEATURES = [
     # 'express_points_received',
 ]
 
+
 class BaseItemItemRecommenderModel:
     def __init__(self, products: np.ndarray, params: dict):
         self.recommender = CosineRecommender(**params)
@@ -45,7 +46,8 @@ class BaseItemItemRecommenderModel:
 
     def _make_user_item_csr_row(self, values, item_idx):
         row = sp.coo_matrix(
-            (values,
+            (
+                values,
                 (
                     np.zeros(len(values)),
                     [self._product_idx[p] for p in item_idx]
@@ -60,7 +62,8 @@ class BaseItemItemRecommenderModel:
         clients_mapper = dict(zip(clients, range(len(clients))))
 
         user_item_matrix = sp.coo_matrix(
-            (purchases.relevance.values,
+            (
+                purchases.relevance.values,
                 (
                     purchases.client_id.map(clients_mapper).values,
                     purchases.product_id.map(self._product_idx).values
@@ -74,7 +77,8 @@ class BaseItemItemRecommenderModel:
         return user_item_matrix
 
     def _fit_recommender(self, purchases):
-        user_item_matrix = self._create_user_item_matrix_from_purchases(purchases)
+        user_item_matrix = self._create_user_item_matrix_from_purchases(
+            purchases)
         logger.debug('Training Recommender Model...')
         self.recommender.fit(user_item_matrix.T)
 
@@ -86,7 +90,8 @@ class CosineRecommenderModel(BaseItemItemRecommenderModel):
         self._idx_product = products.tolist()
 
     def fit_recommender(self, purchases):
-        user_item_matrix = self._create_user_item_matrix_from_purchases(purchases)
+        user_item_matrix = self._create_user_item_matrix_from_purchases(
+            purchases)
         logger.debug('Training CosineRecommender ...')
         self.cosine_recommender.fit(user_item_matrix.T)
         return self
@@ -99,12 +104,13 @@ class CosineRecommenderModel(BaseItemItemRecommenderModel):
         )
 
         cosine_preds = self.cosine_recommender.recommend(
-            0, user_item_csr_row, N=30, 
+            0, user_item_csr_row, N=30,
             recalculate_user=True,
             filter_already_liked_items=False
         )
 
-        cosine_preds = [self._idx_product[idx] for (idx, score) in cosine_preds]
+        cosine_preds = [
+            self._idx_product[idx] for (idx, score) in cosine_preds]
 
         return cosine_preds
 
@@ -122,11 +128,13 @@ class RetailHeroRecommender(BaseItemItemRecommenderModel):
         self._nan_fill_dict = dict()
 
         self.recommender = CosineRecommender(**params_rec)
-        self._product_idx = dict(zip(products.product_id, range(len(products))))
+        self._product_idx = dict(zip(
+            products.product_id, range(len(products))))
+
         self._idx_product = products.product_id.tolist()
         self._product_features = {
-            row['product_id']: dict(row.drop(index='product_id')) \
-                        for (i , row) in products.iterrows()
+            row['product_id']: dict(row.drop(index='product_id'))
+            for (i, row) in products.iterrows()
         }
 
     def _cat_features(self):
@@ -182,14 +190,22 @@ class RetailHeroRecommender(BaseItemItemRecommenderModel):
             val_pool = None
 
         logger.debug('Training Ranker Model...')
-        self.ranker.fit(train_pool, eval_set=val_pool, early_stopping_rounds=100)
+        self.ranker.fit(train_pool,
+                        eval_set=val_pool,
+                        early_stopping_rounds=100)
 
-
-    def train_model(self, train_rec: pd.DataFrame, train_ranker: pd.DataFrame, ranker_labels_dict: dict):
+    def train_model(
+        self,
+        train_rec: pd.DataFrame,
+        train_ranker: pd.DataFrame,
+        ranker_labels_dict: dict
+    ):
         self._fit_recommender(train_rec)
 
-        cb_feats_df = train_ranker.sort_values(by=['client_id', 'transaction_datetime']) \
-                                .drop_duplicates(subset=['client_id', 'product_id'], keep='last')
+        cb_feats_df = train_ranker.sort_values(
+            by=['client_id', 'transaction_datetime'])
+        cb_feats_df = cb_feats_df.drop_duplicates(
+            subset=['client_id', 'product_id'], keep='last')
 
         logger.debug('Preparing Train data for Ranker Model...')
         implicit_preds = []
@@ -200,19 +216,20 @@ class RetailHeroRecommender(BaseItemItemRecommenderModel):
             )
 
             pred = self.recommender.recommend(
-                0, csr_row, N=30, 
+                0, csr_row, N=30,
                 recalculate_user=True,
                 filter_already_liked_items=False
             )
 
-            for (i , (idx , score)) in enumerate(pred):
+            for (i, (idx, score)) in enumerate(pred):
                 implicit_preds.append(
                     {
                         'client_id': cid,
                         'score': score,
                         'product_id': self._idx_product[idx],
                         'weight': len(pred) - i,
-                        'target': int(self._idx_product[idx] in ranker_labels_dict[cid]), 
+                        'target': int(
+                            self._idx_product[idx] in ranker_labels_dict[cid]),
                     }
                 )
 
@@ -238,7 +255,7 @@ class RetailHeroRecommender(BaseItemItemRecommenderModel):
             item_idx=products_counter.keys()
         )
         rec_preds = self.recommender.recommend(
-            0, user_item_csr_row, N=30, 
+            0, user_item_csr_row, N=30,
             recalculate_user=True,
             filter_already_liked_items=False
         )
@@ -265,12 +282,14 @@ class RetailHeroRecommender(BaseItemItemRecommenderModel):
         preds_df = pd.DataFrame(data_list)
         preds_df = self._fillna(preds_df)
 
-        preds_df.loc[:, 'catb_score'] = self.ranker.predict(preds_df[self._catboost_features])
-        result = preds_df.sort_values(by='catb_score', ascending=False).product_id.tolist()
+        preds_df.loc[:, 'catb_score'] = self.ranker.predict(
+            preds_df[self._catboost_features])
+        result = preds_df.sort_values(
+            by='catb_score', ascending=False).product_id.tolist()
+
         if len(result) < 30:
             for t_prod in TOP_PRODUCTS:
-                if t_prod not in result and len(result) < 30:
+                if t_prod not in result:
                     result.append(t_prod)
 
         return result[:30]
-

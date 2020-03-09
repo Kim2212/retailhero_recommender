@@ -32,14 +32,19 @@ if __name__ == '__main__':
     df_clients = pd.read_csv(os.path.join(DIR, 'clients.csv'))
     df_products = pd.read_csv(os.path.join(DIR, 'products.csv'))
     df_purchases = pd.read_csv(os.path.join(DIR, 'purchases.csv'),
-                                    parse_dates=['transaction_datetime'])
+                               parse_dates=['transaction_datetime'])
 
-    df_purchases['client_len_products'] = df_purchases.groupby('client_id').product_id.transform('size')
+    df_purchases['client_len_products'] = df_purchases.groupby(
+        'client_id').product_id.transform('size')
     df_purchases['relevance'] = df_purchases.eval('1 / client_len_products')
 
-    df_purchases = pd.merge(df_purchases, df_products, on='product_id', how='left')
-    df_purchases = pd.merge(df_purchases, df_clients[['client_id', 'age', 'gender']],
-                            on='client_id', how='left')
+    df_purchases = pd.merge(
+        df_purchases, df_products, on='product_id', how='left'
+    )
+    df_purchases = pd.merge(
+        df_purchases, df_clients[['client_id', 'age', 'gender']],
+        on='client_id', how='left'
+    )
 
     logger.debug('Splitting train / valid data...')
     df_train = df_purchases.query(f'transaction_datetime < "{SPLIT_DATE}"')
@@ -63,10 +68,12 @@ if __name__ == '__main__':
     df_test_clients = df_train[df_train.client_id.isin(val_clients[10000:])]
 
     logger.debug('Training Model...')
-    cosine_model = CosineRecommenderModel(df_products.product_id.unique(), params_rec)
+    cosine_model = CosineRecommenderModel(
+        df_products.product_id.unique(), params_rec)
     cosine_model.fit_recommender(df_train_rec)
 
-    retailHeroModel = RetailHeroRecommender(df_products, params_rec, params_catboost)
+    retailHeroModel = RetailHeroRecommender(
+        df_products, params_rec, params_catboost)
     retailHeroModel.train_model(df_train_rec, df_train_ranker, val_dict)
 
     logger.debug('Succsessfully trained Model')
